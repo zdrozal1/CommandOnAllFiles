@@ -1,61 +1,242 @@
 {
   "name": "workspace-formatter",
-  "displayName": "workspace-formatter",
-  "description": "Format all files in a workspace.",
-  "version": "0.0.1",
+  "displayName": "Workspace Formatter & Command on All Files",
+  "description": "Format all files in a workspace or folder, and apply any VS Code command to all matching files.",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.107.0"
   },
   "categories": [
+    "Formatters",
     "Other"
   ],
-  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "workspace-formatter.formatAll",
-        "title": "Format All Workspace Files"
+        "title": "Workspace Formatter: Format All Workspace Files"
       },
       {
         "command": "workspace-formatter.formatFolder",
-        "title": "Format All Files in Folder"
+        "title": "Workspace Formatter: Format All Files in Folder"
+      },
+      {
+        "command": "commandOnAllFiles.applyOnWorkspace",
+        "title": "Command on All Files: Apply on Workspace"
       }
     ],
     "menus": {
       "explorer/context": [
         {
           "command": "workspace-formatter.formatFolder",
-          "group": "7_modification",
-          "when": "explorerResourceIsFolder"
+          "when": "explorerResourceIsFolder",
+          "group": "7_modification@1"
         }
       ]
+    },
+    "configuration": {
+      "title": "Command on All Files",
+      "properties": {
+        "commandOnAllFiles.includeFileExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\..+",
+            "patternErrorMessage": "Each extension must begin with a period, e.g. \".ts\""
+          },
+          "default": [],
+          "markdownDescription": "Only files whose extension appears in this list will be processed. Each entry **must include the leading period** — e.g. `[\".html\", \".css\", \".js\"]`. An empty list means no extension filter is applied (all files are eligible).\n\nIgnored when `commandOnAllFiles.includeFiles` is set on the same command."
+        },
+        "commandOnAllFiles.includeFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "regex"
+            ],
+            "properties": {
+              "regex": {
+                "type": "string",
+                "description": "A JavaScript regular expression searched against the file path in the form /workspaceName/relative/path/file.ext (separator: /)."
+              },
+              "flags": {
+                "type": "string",
+                "default": "",
+                "description": "Optional RegExp flags. Only \"i\" (case-insensitive) is meaningful here."
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": null,
+          "markdownDescription": "List of regular expressions of **file paths to include**. When defined and non-empty this setting **overrides** `commandOnAllFiles.includeFileExtensions`.\n\nEach entry has:\n- `regex` — pattern tested against `/workspaceName/relative/path/file.ext`\n- `flags` — optional RegExp flags (`i` is the only useful one)\n\nExample:\n```json\n[\n  { \"regex\": \"/src/components.*\\\\.tsx\" },\n  { \"regex\": \"/test/.*\\\\.py\", \"flags\": \"i\" }\n]\n```"
+        },
+        "commandOnAllFiles.excludeFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "regex"
+            ],
+            "properties": {
+              "regex": {
+                "type": "string",
+                "description": "A JavaScript regular expression searched against the file path in the form /workspaceName/relative/path/file.ext (separator: /)."
+              },
+              "flags": {
+                "type": "string",
+                "default": "",
+                "description": "Optional RegExp flags. Only \"i\" (case-insensitive) is meaningful here."
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": null,
+          "markdownDescription": "List of regular expressions of **file paths to exclude**. Applied after all include filters; a matching file is always skipped.\n\nEach entry has:\n- `regex` — pattern tested against `/workspaceName/relative/path/file.ext`\n- `flags` — optional RegExp flags\n\nExample — skip all generated files:\n```json\n[\n  { \"regex\": \"\\\\.generated\\\\.\" },\n  { \"regex\": \"/dist/\" }\n]\n```"
+        },
+        "commandOnAllFiles.excludeFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            "out",
+            ".vscode-test",
+            "media",
+            ".git"
+          ],
+          "markdownDescription": "Directory names to skip when scanning for files. The `.git` entry is **always** added automatically regardless of this setting, to prevent accidental corruption of your Source Control repository.\n\nIn a **Multi Root Workspace** you can also include a workspace folder's base name here to skip that entire root."
+        },
+        "commandOnAllFiles.includeFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": null,
+          "markdownDescription": "Glob patterns describing which **folders** to include. Only files whose parent directory satisfies at least one pattern will be processed.\n\nThere is no need to start a pattern with `**`. Including the path separator `/` prevents partial directory-name matches — e.g. `\"/src/\"` matches files inside a directory named exactly `src`, but not `src-test`.\n\nWhen this list is empty or absent, all folders (except excluded ones) are eligible.\n\nExample:\n```json\n[\"/src/\", \"/lib/\"]\n```"
+        },
+        "commandOnAllFiles.saveFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Controls what happens after a command is applied to a file.\n\n- `true` *(default)*: Save the file if it was modified, then close its editor tab.\n- `false`: Leave the file open in the editor with any unsaved changes."
+        },
+        "commandOnAllFiles.commands": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The VS Code command ID to execute on each matching file. Find it via File > Preferences > Keyboard Shortcuts — locate the command and right-click > Copy Command ID."
+              },
+              "includeFileExtensions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\..+"
+                },
+                "description": "Override commandOnAllFiles.includeFileExtensions for this command only."
+              },
+              "includeFiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "regex"
+                  ],
+                  "properties": {
+                    "regex": {
+                      "type": "string"
+                    },
+                    "flags": {
+                      "type": "string",
+                      "default": ""
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "Override commandOnAllFiles.includeFiles for this command only."
+              },
+              "excludeFiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "regex"
+                  ],
+                  "properties": {
+                    "regex": {
+                      "type": "string"
+                    },
+                    "flags": {
+                      "type": "string",
+                      "default": ""
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "Override commandOnAllFiles.excludeFiles for this command only."
+              },
+              "excludeFolders": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Override commandOnAllFiles.excludeFolders for this command only. .git is always added."
+              },
+              "includeFolders": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Override commandOnAllFiles.includeFolders for this command only."
+              },
+              "saveFiles": {
+                "type": "boolean",
+                "description": "Override commandOnAllFiles.saveFiles for this command only."
+              },
+              "label": {
+                "type": "string",
+                "description": "Custom QuickPick label for this command (shown in the Command Palette picker). Defaults to the key name. Supports VS Code icon syntax, e.g. $(file-code) Format TypeScript."
+              },
+              "description": {
+                "type": "string",
+                "description": "QuickPick description (shown to the right of the label). Supports VS Code icon syntax."
+              },
+              "detail": {
+                "type": "string",
+                "description": "QuickPick detail line (shown below the label). Supports VS Code icon syntax."
+              }
+            },
+            "additionalProperties": false
+          },
+          "markdownDescription": "Named commands available to `commandOnAllFiles.applyOnWorkspace`.\n\nEach **key** is a human-readable description that identifies the command in keybindings (`\"args\": [\"My Key\"]`) and the Command Palette picker. Each **value** configures what to run and which files to target.\n\nAll file-filtering properties (`includeFileExtensions`, `includeFiles`, `excludeFiles`, `excludeFolders`, `includeFolders`, `saveFiles`) are optional and override the corresponding global settings when present.\n\nExample:\n```json\n\"commandOnAllFiles.commands\": {\n  \"Format TypeScript\": {\n    \"command\": \"editor.action.formatDocument\",\n    \"includeFileExtensions\": [\".ts\", \".tsx\"],\n    \"label\": \"$(file-code) Format TypeScript\",\n    \"detail\": \"Runs editor.action.formatDocument on all .ts/.tsx files\"\n  },\n  \"Organise Imports\": {\n    \"command\": \"editor.action.organizeImports\",\n    \"includeFileExtensions\": [\".ts\"],\n    \"saveFiles\": false\n  }\n}\n```"
+        }
+      }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "npm run check-types && npm run lint && node esbuild.js",
-    "watch": "npm-run-all -p watch:*",
-    "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && npm run lint && node esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.107.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
-    "eslint": "^9.39.3",
-    "esbuild": "^0.27.3",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.65.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/test-electron": "^2.3.0",
+    "@vscode/vsce": "^2.0.0"
   }
 }
