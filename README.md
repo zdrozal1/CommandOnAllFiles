@@ -1,69 +1,80 @@
-# Workspace Formatter & Command on All Files
+# File Commander
 
-A VS Code extension to quickly format your entire workspace or specific folders, and to sequentially apply any VS Code command to all files in a Workspace based on deeply customizable filter criteria.
+A streamlined VS Code extension that allows you to execute highly customizable VS Code commands on individual files or an entire folder of files.
+
+Built with performance in mind, this extension sequentially processes files to prevent memory exhaustion, automatically saves modified files, and cleans up after itself by closing any editor tabs it had to open during execution (while preserving tabs you already had open).
+
+## Features
+
+- **Context Menu Integration:** Easily right-click a file or folder in the VS Code Explorer to trigger your custom commands.
+- **Dynamic Folder Scanning:** When running on a folder, the extension automatically detects all available file types inside and prompts you to select exactly which extensions you want to target.
+- **Sequential Command Execution:** Queue up multiple VS Code commands (e.g., organize imports, then format document) to run in a specific order across an entire folder.
+- **Allowed Extensions Protection:** Prevent accidental runs on unsupported files by defining an allowed list of file extensions for single-file execution.
+- **Workspace Cleanup:** Automatically closes editor tabs after processing to prevent excessive open tabs, leaving your originally open files completely untouched.
 
 ## Commands
 
-### Workspace Formatter Commands
+### File Commander: Run Command on File (`fileCommander.runOnFile`)
 
-**Workspace Formatter: Format All Workspace Files** (`workspace-formatter.formatAll`)
-Scans the entire workspace for supported files (`.ts`, `.js`, `.json`, `.java`, `.py`, `.cpp`, `.cs`), ignoring `node_modules`, and sequentially applies the `editor.action.formatDocument` command to each.
+Right-click a file in the Explorer and select this command to process it.
 
-**Workspace Formatter: Format All Files in Folder** (`workspace-formatter.formatFolder`)
-Scans a specific folder and dynamically prompts you to select which of the detected file extensions you want to process. Applies both `editor.action.organizeImports` and `editor.action.formatDocument` to the matching files.
-_Note: You can access this command directly by right-clicking a folder in the Explorer context menu._
+1. The extension verifies that the file's extension is allowed in your `fileCommander.allowedExtensions` setting.
+2. A QuickPick menu appears, allowing you to choose a single custom command to execute.
+3. The file is processed, saved, and closed (depending on your configuration).
 
-### Command on All Files Commands
+### File Commander: Run Commands on Folder (`fileCommander.runOnFolder`)
 
-**CommandOnAllFiles: Apply to Workspace** (`commandOnAllFiles.applyOnWorkspace`)
-Applies a configured command to all files in the (Multi Root) Workspace. It accepts an argument array where the first element is a key from the `commandOnAllFiles.commands` setting.
+Right-click a folder in the Explorer and select this command to process its contents.
 
-When called from the command palette without an argument, a QuickPick list of configured commands is shown for you to select.
-
-The command will:
-
-1. Open all files in an editor that meet the configuration criteria. (If the file is already open, it preserves the tab).
-2. Apply the specified command ID to the document.
-3. Save the file.
-4. Close the editor, unless the file was already actively open in your workspace prior to the execution.
+1. The extension scans the folder (ignoring `node_modules` and `.git`) and discovers all available file extensions.
+2. A multi-select menu prompts you to choose which file types you want to process.
+3. A sequential QuickPick menu allows you to queue multiple commands in a specific order.
+4. After a confirmation prompt, the extension processes all matching files sequentially with a progress bar.
 
 ## Extension Settings
 
-- **`commandOnAllFiles.includeFileExtensions`**: Only files with file extensions in this list will be processed. Example `[".html", ".css", ".js"]`. Defaults to `[]`.
-- **`commandOnAllFiles.includeFiles`**: List of regular expressions of file paths to include. Overrides `includeFileExtensions`. Each list element is an object with:
-  - `regex`: string with a regular expression that is searched in the file path (separator `/`). The file path searched is: `/workspace_name/relative_file_path`.
-  - `flags`: flags to use with the property regex (e.g. `i`). Default `""`.
-- **`commandOnAllFiles.excludeFiles`**: List of regular expressions of file paths to exclude. Follows the same structure as `includeFiles`.
-- **`commandOnAllFiles.excludeFolders`**: These folders will be skipped when looking for files to process. Can contain workspacefolder (base)names to exclude certain Multi Root Workspaces. Defaults to `["node_modules", "out", ".vscode-test", "media", ".git"]`. _(Note: `.git` is automatically appended to prevent accidental repository corruption)._
-- **`commandOnAllFiles.includeFolders`**: An array of Glob Patterns describing folders that will determine which files will be processed. There is no need to use `**` at the start of the Glob Pattern. To prevent an incorrect directory match, always include the separator `/` (e.g. `["/src/"]`).
-- **`commandOnAllFiles.saveFiles`**: If `true` save and close a modified file. If `false` keep a modified file open in the editor. Defaults to `true`.
-- **`commandOnAllFiles.commands`**: An object with key/value items describing the commands to use. The key is the description of a command. The value is an object with the property `command` for the commandID to apply together with possible overrides:
-  - `command`: The VS Code command ID to execute.
-  - `includeFileExtensions`, `includeFiles`, `excludeFiles`, `excludeFolders`, `includeFolders`, `saveFiles`: Overrides global settings if defined.
-  - `label`, `description`, `detail`: Used to construct the QuickPick item when called from the command palette.
+Customize the extension's behavior in your `settings.json` file.
+
+- **`fileCommander.allowedExtensions`**: An array of file extensions that are allowed to be processed when using the "Run on File" command.
+  - _Default:_ `[".java", ".cs"]`
+  - _Example:_ `[".ts", ".js", ".java", ".json"]`
+
+- **`fileCommander.commands`**: An array of custom command configurations available in the pickers.
+  - **`id`**: (String) The exact VS Code command ID to execute (e.g., `"editor.action.formatDocument"`).
+  - **`label`**: (String) The display name shown in the command picker. Supports VS Code icon syntax.
+  - **`description`**: (String, Optional) Additional subtitle text shown under the label.
+
+- **`fileCommander.saveAfterCommands`**: (Boolean) Save each file after all commands have run (only if the document was modified).
+  - _Default:_ `true`
+
+- **`fileCommander.closeAfterProcessing`**: (Boolean) Close editor tabs that were **not already open** before processing started.
+  - _Default:_ `true`
 
 ## Example Configuration
 
-This example uses the `multiCommand` extension to chain multiple actions, applying a "Hello" append to all `.txt` files in a workspace.
-
-**In `settings.json`:**
+Add the following to your `settings.json` to configure your allowed file types and set up a few useful commands:
 
 ```json
-  "multiCommand.commands": [
+{
+  "fileCommander.allowedExtensions": [".java", ".cs", ".ts", ".js"],
+  "fileCommander.saveAfterCommands": true,
+  "fileCommander.closeAfterProcessing": true,
+  "fileCommander.commands": [
     {
-      "command": "multiCommand.addHelloAtEnd",
-      "sequence": [
-        "cursorBottom",
-        { "command": "type",
-          "args": { "text": "Hello" }
-        }
-      ]
+      "id": "editor.action.organizeImports",
+      "label": "$(symbol-namespace) Organize Imports",
+      "description": "Sort and remove unused imports"
+    },
+    {
+      "id": "editor.action.formatDocument",
+      "label": "$(file-code) Format Document",
+      "description": "Apply the code formatter to the file"
+    },
+    {
+      "id": "editor.action.fixAll",
+      "label": "$(wrench) Fix All Auto-Fixable Problems",
+      "description": "Runs ESLint/Prettier auto-fixes"
     }
-  ],
-  "commandOnAllFiles.commands": {
-    "Add Hello to the End": {
-      "command": "multiCommand.addHelloAtEnd",
-      "includeFileExtensions": [".txt"]
-    }
-  }
+  ]
+}
 ```
